@@ -7,27 +7,31 @@ PyPI. What it holds is a **list** of which libraries are in the catalogue, and
 the tooling under `scripts/` that turns that list into feeds a Haywire studio
 can subscribe to.
 
-## What subscribing gets you
+
+
+## Subscribing
 
 Paste one of these into **Add Source** in the studio's Library Browser, or edit
 `~/.haywire/db/haybale_marketplace/marketplace.toml` directly.
 
-**stable:** versions proven to install **together**
+There are three channels to choose from:
+
+**stable:** versions proven to install _together_
 
 ```TEXT
 https://going-haywire.github.io/marketplace/stable/marketplace.toml
 ```
 
-**latest**: the newest version of each library as of the last catalogue release
+**latest**: the newest version of each library as of the _last catalogue release_
 
 ```TEXT
 https://going-haywire.github.io/marketplace/latest/marketplace.toml
 ```
 
-**edge:** whatever is newest on PyPI right now
+**edge:** whatever is _newest_ on PyPI right now
 
 ```TEXT
-`https://going-haywire.github.io/marketplace/edge/marketplace.toml
+https://going-haywire.github.io/marketplace/edge/marketplace.toml
 ```
 
 `stable` is the default a fresh Haywire install subscribes to, alongside the framework's own feed at `going-haywire.github.io/haywire/marketplace.toml`.
