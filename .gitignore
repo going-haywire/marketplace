@@ -1,0 +1,12 @@
+# The generated site. Built by scripts/generate_feed.py and deployed to the
+# gh-pages branch; never committed to the default branch.
+_site/
+
+# uv
+.venv/
+uv.lock
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

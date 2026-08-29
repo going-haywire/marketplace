@@ -1,0 +1,21 @@
+# Membership is the only human decision in this system; everything downstream
+# of it is computed. These three paths are where that decision is expressed, so
+# they are the ones that need a curator's review.
+#
+# Requires the @going-haywire/curators team to exist, and branch protection on
+# the default branch requiring PR review plus the `verify` and `lock-check`
+# checks. Without branch protection this file is advisory only.
+
+# Who is in the catalogue.
+/registry/                 @going-haywire/curators
+
+# The only knob on the stable solve.
+/stable.constraints.txt    @going-haywire/curators
+
+# Written by the toolchain, never by hand — but a lock diff is the reviewable
+# artifact of a curation cycle, so it needs the same eyes.
+/locks/                    @going-haywire/curators
+
+# The tooling that derives everything above.
+/scripts/                  @going-haywire/curators
+/.github/                  @going-haywire/curators

@@ -1,0 +1,138 @@
+# THE PRIVILEGED TIER. Deploys the published feeds to GitHub Pages on a
+# curation tag.
+#
+# This job can write, so it must never run submitted code. Every step below is
+# metadata handling: unzipping wheels, reading TOML, querying the PyPI JSON
+# API, writing files. Row generation genuinely does not need execution — that
+# is the property the whole permission split rests on.
+#
+# **Do not add a step here that installs-and-imports a candidate library.** The
+# load gate lives in verify.yml, which holds no token and no secrets. If a
+# library needs to be proven loadable before deploy, it is proven there, on the
+# pull request, before the tag exists.
+
+name: deploy
+
+on:
+  push:
+    tags:
+      - "20*"          # curation tags: 2026.08.29, 2026.08.29.1
+  workflow_dispatch:
+    inputs:
+      curation_tag:
+        description: "Curation tag to archive under (blank = no archive)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: generate and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # to push the built site to gh-pages
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Determine the curation tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.curation_tag }}" ]; then
+            echo "value=${{ github.event.inputs.curation_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Yank check
+        # Under PEP 592 a yanked release is ignored by resolvers UNLESS the
+        # requirement pins it exactly with `==` — which every stable and latest
+        # row does. An author's "do not use this release" is precisely the
+        # signal our pinning defeats, so it is checked explicitly, and it is
+        # checked here rather than only on the PR because a release can be
+        # yanked between merge and tag.
+        run: |
+          uv run python scripts/verify_lock.py --lock locks/stable.toml --yanks-only
+          if [ -f locks/latest.toml ]; then
+            uv run python scripts/verify_lock.py --lock locks/latest.toml --yanks-only
+          fi
+
+      - name: Fetch the published site
+        # The archives are immutable and must survive every deploy, so the
+        # existing gh-pages tree is checked out and generated *into*. The
+        # archive index is then built by scanning what is actually on disk,
+        # which is what keeps it from drifting from what is served.
+        run: |
+          git fetch origin gh-pages --depth=1 || true
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            git worktree add _site origin/gh-pages
+          else
+            mkdir -p _site
+          fi
+
+      - name: Generate the site
+        run: |
+          uv run python scripts/generate_feed.py \
+            --out-dir _site \
+            --curation-tag "${{ steps.tag.outputs.value }}" \
+            --strict
+
+      - name: Check no archive was overwritten
+        # An archive is a promise: a subscriber pinned to one must keep getting
+        # the same bytes forever. Re-tagging an existing curation tag would
+        # quietly rewrite one, so it fails the deploy instead.
+        run: |
+          cd _site
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            changed=$(git diff --name-only origin/gh-pages -- '*/20*/marketplace.toml' || true)
+            if [ -n "$changed" ]; then
+              echo "::error::this deploy would rewrite an existing archive:"
+              echo "$changed"
+              echo "Archives are immutable. Use a new curation tag."
+              exit 1
+            fi
+          fi
+
+      - name: Deploy to gh-pages
+        run: |
+          cd _site
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to deploy"
+            exit 0
+          fi
+          git commit -m "deploy: ${{ steps.tag.outputs.value }}"
+          git push origin HEAD:gh-pages
+
+      - name: Confirm the published URLs
+        # The acceptance check from the build plan, run automatically: a deploy
+        # that reports success while serving a 404 is the failure this catches.
+        run: |
+          sleep 30
+          base=https://going-haywire.github.io/marketplace
+          fail=0
+          for url in \
+            "$base/stable/marketplace.toml" \
+            "$base/latest/marketplace.toml" \
+            "$base/edge/marketplace.toml" \
+            "$base/archives.html"; do
+            if curl -sfo /dev/null "$url"; then
+              echo "ok   $url"
+            else
+              echo "::warning::not yet serving $url (Pages can lag a few minutes)"
+              fail=1
+            fi
+          done
+          exit 0   # Pages propagation lag is not a deploy failure.

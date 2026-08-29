@@ -1,0 +1,102 @@
+# Regenerate `edge` nightly, and open the issue that starts a curation cycle.
+#
+# `edge` is regenerated even though its install_spec floats, because the studio
+# computes "update available" as `installed_version < row.version`. A frozen
+# `version` field would mean edge subscribers are never offered an update at
+# all — the channel would look permanently up to date while pointing at
+# whatever PyPI currently serves.
+#
+# Privileged tier: it writes to gh-pages, so it imports nothing. Regenerating a
+# row is unzipping a wheel.
+#
+# The issue it opens is purely informational. It makes no decision, promotes
+# nothing, and changes no pin: it is the notification a curator reads before
+# running scripts/solve_stable.py.
+
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  edge:
+    name: regenerate edge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Fetch the published site
+        run: |
+          git fetch origin gh-pages --depth=1 || true
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            git worktree add _site origin/gh-pages
+          else
+            mkdir -p _site
+          fi
+
+      - name: Regenerate edge only
+        # Only `edge`. The pinned channels advance at a curation tag, and
+        # rebuilding them here would let the published set drift from the lock
+        # that was actually reviewed and verified.
+        run: uv run python scripts/generate_feed.py --out-dir _site --channel edge
+
+      - name: Deploy
+        run: |
+          cd _site
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "edge unchanged"
+            exit 0
+          fi
+          git commit -m "nightly: regenerate edge"
+          git push origin HEAD:gh-pages
+
+  newer-releases:
+    name: report newer releases
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Compare PyPI against the stable lock
+        id: report
+        run: uv run python scripts/report_newer.py --out newer.md
+
+      - name: Open or update the curation issue
+        if: steps.report.outputs.has_newer == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Newer releases available for the stable set"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file newer.md
+          else
+            gh issue create --title "$title" --body-file newer.md --label curation
+          fi

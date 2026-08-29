@@ -1,0 +1,128 @@
+# Issue-ops: an "Add a library" issue becomes a registry entry and a pull
+# request, with the verdict posted back on the author's own issue.
+#
+# The point of posting back is that a failure reaches the person who can fix
+# it. A submitter who has to go looking in a CI log to find out their entry
+# point is missing will not go looking.
+#
+# This job writes (a branch, a PR, a comment) and therefore **never imports a
+# submitted library**. It runs the metadata gate only — resolving the
+# distribution, unzipping the wheel, reading the haybale.toml, checking the
+# entry point is declared. Whether the library actually loads is decided by
+# verify.yml on the pull request this opens, in a job with no permissions.
+#
+# The issue body is untrusted input from a stranger: it is passed to the parser
+# as a file, never interpolated into a shell command, and the distribution name
+# is validated against PEP 508's grammar before it reaches a path.
+
+name: submit
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: submit-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    if: contains(github.event.issue.labels.*.name, 'add-library')
+    name: process submission
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Write the issue body to a file
+        # Via the environment, not string interpolation: the body is attacker-
+        # controlled text and `${{ }}` in a `run:` block is a shell injection.
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: printf '%s' "$ISSUE_BODY" > issue-body.md
+
+      - name: Parse the issue into a registry entry
+        id: parse
+        run: |
+          uv run python scripts/issue_to_registry.py \
+            --body-file issue-body.md \
+            --number "${{ github.event.issue.number }}" \
+            --github-output
+
+      - name: Run the metadata gate
+        id: gate
+        continue-on-error: true
+        run: |
+          uv run python scripts/check_submission.py \
+            --name "${{ steps.parse.outputs.name }}" \
+            --markdown verdict.md
+
+      - name: Open the pull request
+        if: steps.gate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ steps.parse.outputs.name }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          branch="add/${NAME}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add registry/
+          git commit -m "Add ${NAME} to the catalogue
+
+          Closes #${NUMBER}"
+          git push -f origin "$branch"
+          gh pr create \
+            --title "Add ${NAME} to the catalogue" \
+            --body "$(cat verdict.md)
+
+          Closes #${NUMBER}
+
+          The metadata gate passed. \`verify.yml\` now installs and imports this
+          library in a job with no permissions and no secrets; a curator reviews
+          and merges. Nothing here asserts the code is safe or correct — nobody
+          reads the source." \
+            --head "$branch" || echo "a PR for $branch already exists"
+
+      - name: Post the verdict on the issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          {
+            if [ "${{ steps.gate.outcome }}" = "success" ]; then
+              echo "The metadata checks passed and a pull request is open."
+              echo
+              echo "What happens next, without you doing anything:"
+              echo
+              echo "- \`verify.yml\` installs and imports your library."
+              echo "- A curator reviews and merges."
+              echo "- It appears in **edge** on the next nightly run."
+              echo "- In **latest** at the next catalogue release, if it loads cleanly."
+              echo "- In **stable** at the next Haywire release, if it fits alongside the set."
+              echo
+            else
+              echo "The metadata checks **failed**, so no pull request was opened."
+              echo "Fix the point below, then edit this issue — that re-runs the checks."
+              echo
+            fi
+            if [ -f verdict.md ]; then cat verdict.md; fi
+          } > comment.md
+          gh issue comment "$NUMBER" --body-file comment.md
+
+      - name: Fail the run when the gate failed
+        if: steps.gate.outcome != 'success'
+        run: exit 1

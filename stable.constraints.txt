@@ -1,0 +1,18 @@
+# Curator holds and exclusions — the only knob on the stable solve.
+#
+# Every line needs a `#` reason. The reason is quoted verbatim into
+# stable-report.md, which is the document a library author is pointed at when
+# their newest release did not land in `stable`, so write it for them.
+#
+# Two kinds of line:
+#
+#   haybale-x<2.0     # a deliberate ceiling
+#   haybale-x!=1.4.0  # a single version that failed the load gate
+#
+# In an ordinary cycle this file is not touched: the solve runs, the lock diff
+# is the answer, and nothing here needs to change. Reach for it only when you
+# disagree with a relaxation the solver made — and prefer asking the author to
+# widen their constraint, since a hold here has to be remembered and removed.
+#
+# Not a place to record removals: a library that should leave the catalogue is
+# `git rm registry/<name>.toml`, not a line here.

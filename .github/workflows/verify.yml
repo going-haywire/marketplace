@@ -1,0 +1,84 @@
+# THE UNTRUSTED TIER. This is the only workflow that runs submitted code, and
+# it must hold nothing worth stealing.
+#
+# Installing a wheel executes nothing. **Importing it does.** This job imports
+# candidate libraries to prove they load, so it is built on the assumption that
+# the code it runs is hostile:
+#
+#   * `permissions: {}` — the GITHUB_TOKEN can write nothing, anywhere.
+#   * No `secrets` reference. Not one, ever. Adding a secret here hands it to
+#     every submitted library.
+#   * `pull_request`, never `pull_request_target` — the latter runs with the
+#     base repo's token and secrets against the *fork's* code, which is the
+#     exact combination this split exists to prevent.
+#
+# Row generation never needs execution: reading a library's metadata out of a
+# wheel is unzipping, which is why the privileged tier (deploy.yml, nightly.yml)
+# has no reason to import anything. Getting this boundary wrong turns a curated
+# marketplace into a supply-chain vector aimed at its own subscribers.
+#
+# If you are about to add a step here that needs a token, it belongs in a
+# different workflow.
+
+name: verify
+
+on:
+  pull_request:
+    paths:
+      - "registry/**"
+      - "locks/**"
+      - "stable.constraints.txt"
+      - "scripts/**"
+      - ".github/workflows/verify.yml"
+
+permissions: {}
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    # The metadata gate: unzip only, no execution. Fast, and it catches most
+    # bad submissions before anything is imported at all.
+    name: metadata gate
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Check every registry entry resolves and carries a valid haybale
+        run: uv run python scripts/check_submission.py --all
+
+  load:
+    # The load gate: install AND import each library, and assert its components
+    # register. This is the step that runs submitted code.
+    name: load gate
+    runs-on: ${{ matrix.os }}
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Libraries declare an `os` field; a library that loads on Linux may not
+        # on macOS. check_load.py skips a library whose `os` excludes the runner
+        # rather than failing it.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install and import each candidate
+        run: uv run python scripts/check_load.py --registry registry

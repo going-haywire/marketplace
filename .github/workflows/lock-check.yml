@@ -1,0 +1,62 @@
+# Re-solve the committed locks from scratch and fail if they are not what the
+# inputs produce. This is what stops a lock being hand-edited past a failing
+# check.
+#
+# Note it is a re-*solve*, not merely a co-install check. Asking only "do these
+# pins still install together" passes a tampered lock, because an edited pin
+# usually produces a set that resolves perfectly well. The question that catches
+# it is "would the solver have chosen this?".
+#
+# That question is only fair to ask because the resolution is time-pinned:
+# verify_lock.py reads `exclude_newer` out of the lock itself and reuses it
+# verbatim, so this job and the curator who ran the solve see the same PyPI.
+# Without that, a release appearing between the two would make them disagree
+# legitimately and the build would fail for no reason — the classic way a
+# reproducibility check gets switched off for being noisy.
+#
+# Read-only, and imports nothing: recompiling is resolution, and the yank check
+# is an HTTP request.
+
+name: lock-check
+
+on:
+  pull_request:
+    paths:
+      - "registry/**"
+      - "locks/**"
+      - "stable.constraints.txt"
+      - "scripts/**"
+      - ".github/workflows/lock-check.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lock-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  recompile:
+    name: recompile and compare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Verify locks/stable.toml
+        run: uv run python scripts/verify_lock.py --lock locks/stable.toml
+
+      - name: Verify locks/latest.toml
+        # `latest` is not a solved set, so only its yank check applies: a
+        # recompile would assert co-installation, which is exactly the thing
+        # `latest` deliberately does not promise.
+        if: hashFiles('locks/latest.toml') != ''
+        run: uv run python scripts/verify_lock.py --lock locks/latest.toml --yanks-only

@@ -1,0 +1,38 @@
+[project]
+name = "haywire-marketplace"
+version = "0.1.0"
+description = "Tooling for the Haywire curated marketplace — turns registry/*.toml into three published feeds."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+# haywire-core is a dependency, not a vendored copy, so the emitted row shape
+# cannot drift from what a subscribing studio parses: the generator builds rows
+# as `Haybale` and takes its field order from `Haybale._TOML_FIELDS`, and the
+# tests parse generated feeds back through the studio's own parser. A floor
+# rather than a pin — the shape is stable across patch releases, and pinning
+# would mean this repo could not verify against the framework release it is
+# about to publish a `stable` set for.
+dependencies = [
+    "haywire-core>=0.1.0",
+    "packaging>=24.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.12.8,<0.13",
+]
+
+[tool.uv]
+# The solver shells out to `uv pip compile`; it is not imported.
+required-version = ">=0.5"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

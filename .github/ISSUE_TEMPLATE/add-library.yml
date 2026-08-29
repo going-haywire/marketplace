@@ -1,0 +1,73 @@
+name: Add a library
+description: Submit a library for the curated catalogue. A bot runs the checks and opens the PR.
+title: "Add haybale-"
+labels: ["add-library"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill in three fields. A bot reads this issue, writes the registry
+        entry, runs the checks, opens a pull request that closes this issue,
+        and posts the verdict back here — so if a check fails you find out on
+        this page rather than having to go looking.
+
+        **Before you submit**, your library needs:
+
+        - to be **published on PyPI**. Git-installable libraries are not
+          accepted, from anyone, including us — a PyPI version is immutable,
+          while a git tag can be moved with `git tag -f` and the code moves
+          with it.
+        - a **`haybale.toml` inside the wheel**, with at least `name` and
+          `version`.
+        - a **`haywire.libraries` entry point** in your `pyproject.toml`.
+        - `distribute = "pypi"` under `[tool.haywire.marketstall]`, so your own
+          feed advertises the same coordinate this catalogue will. Without it,
+          anyone subscribed to both sees your library twice, in conflict.
+
+        Being listed asserts that your distribution exists, that this name maps
+        to it, and — for `stable` — that it fits alongside the rest of the set.
+        It asserts nothing about whether the code is safe or correct. Nobody
+        reads the source.
+
+  - type: input
+    id: distribution
+    attributes:
+      label: PyPI distribution name
+      description: Exactly as it appears on PyPI.
+      placeholder: haybale-visiongraph
+    validations:
+      required: true
+
+  - type: input
+    id: repo
+    attributes:
+      label: Source repository
+      description: Where the code lives. Recorded for curators; it never reaches a published row.
+      placeholder: https://github.com/you/haybale-yourlib
+    validations:
+      required: true
+
+  - type: input
+    id: contact
+    attributes:
+      label: Contact
+      description: A GitHub handle we can reach about this library.
+      placeholder: your-handle
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Optional. Not published — everything descriptive comes from your wheel.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirm
+      options:
+        - label: It is published on PyPI, its wheel contains a `haybale.toml`, and it declares a `haywire.libraries` entry point.
+          required: true
