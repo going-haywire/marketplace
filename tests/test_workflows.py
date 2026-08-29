@@ -103,6 +103,29 @@ def test_deploy_only_runs_metadata_scripts():
     assert called <= allowed, f"deploy.yml calls unexpected scripts: {called - allowed}"
 
 
+def test_deploy_bootstraps_site_as_its_own_repo():
+    """The first-deploy bug: a bare `mkdir _site` publishes nothing, silently.
+
+    Without `git init`, `_site` is a plain directory inside the checked-out main
+    worktree — where it is gitignored. `git add -A` then stages nothing,
+    `git diff --cached` is empty, and the job exits 0 having published nothing
+    at all. The first real tag did exactly that: a green deploy serving 404s.
+    """
+    body = read("deploy.yml")
+    assert "git init -q _site" in body
+    assert "checkout -q -b gh-pages" in body
+
+
+def test_deploy_fails_when_it_publishes_nothing():
+    """A green deploy that served 404s is the failure this repo already had."""
+    body = read("deploy.yml")
+    # The generated tree must be present before anything is staged.
+    assert "_site holds no generated feed" in body
+    # And the URL confirmation must be able to fail, not warn-and-exit-0.
+    assert "deploy finished but the published feeds are not being served" in body
+    assert "exit 0   # Pages propagation lag is not a deploy failure." not in body
+
+
 def test_submit_does_not_interpolate_the_issue_body_into_a_shell():
     """The issue body is attacker-controlled; `${{ }}` in `run:` is injection."""
     body = read("submit.yml")

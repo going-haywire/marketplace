@@ -72,12 +72,22 @@ jobs:
         # existing gh-pages tree is checked out and generated *into*. The
         # archive index is then built by scanning what is actually on disk,
         # which is what keeps it from drifting from what is served.
+        #
+        # On the very first deploy there is no gh-pages branch, and `_site` must
+        # still be its OWN repository. A plain `mkdir` leaves it a directory
+        # inside the checked-out main worktree, where `_site/` is gitignored —
+        # so the deploy step's `git add -A` stages nothing, `git diff --cached`
+        # is empty, and the job exits 0 having published absolutely nothing.
+        # That is what happened on the first tag: a green deploy serving 404s.
         run: |
           git fetch origin gh-pages --depth=1 || true
           if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
             git worktree add _site origin/gh-pages
           else
+            echo "no gh-pages branch yet — bootstrapping an orphan repo in _site"
             mkdir -p _site
+            git init -q _site
+            git -C _site checkout -q -b gh-pages
           fi
 
       - name: Generate the site
@@ -108,9 +118,23 @@ jobs:
           cd _site
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # The bootstrap repo has no remote of its own; a worktree inherits one.
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+
+          # A generated site is never empty, so an empty index means the tree
+          # being staged is not the one that was written — the failure mode this
+          # step shipped with. Refuse to report success on it.
+          if [ ! -f marketplace.toml ] && [ ! -f stable/marketplace.toml ]; then
+            echo "::error::_site holds no generated feed — nothing was staged for deploy."
+            exit 1
+          fi
+
           git add -A
-          if git diff --cached --quiet; then
-            echo "nothing to deploy"
+          if git diff --cached --quiet && git rev-parse HEAD >/dev/null 2>&1; then
+            # A real no-op: the published site already matches, byte for byte.
+            echo "published site is already up to date"
             exit 0
           fi
           git commit -m "deploy: ${{ steps.tag.outputs.value }}"
@@ -119,20 +143,43 @@ jobs:
       - name: Confirm the published URLs
         # The acceptance check from the build plan, run automatically: a deploy
         # that reports success while serving a 404 is the failure this catches.
+        #
+        # Retried rather than slept-once, because Pages propagation is genuinely
+        # slow and a fixed sleep either wastes time or flakes. But it does FAIL
+        # at the end: this step exited 0 on every outcome in the first version,
+        # which is how a deploy that published nothing at all still went green.
+        #
+        # Skipped when Pages is not yet enabled — that is a one-time manual step
+        # and not something a deploy can or should fix.
         run: |
-          sleep 30
           base=https://going-haywire.github.io/marketplace
-          fail=0
-          for url in \
-            "$base/stable/marketplace.toml" \
-            "$base/latest/marketplace.toml" \
-            "$base/edge/marketplace.toml" \
-            "$base/archives.html"; do
+          urls="$base/stable/marketplace.toml $base/latest/marketplace.toml \
+                $base/edge/marketplace.toml $base/archives.html"
+
+          for attempt in $(seq 1 10); do
+            fail=0
+            for url in $urls; do
+              curl -sfo /dev/null "$url" || fail=1
+            done
+            [ "$fail" -eq 0 ] && break
+            echo "attempt $attempt: not all URLs serving yet, waiting 30s"
+            sleep 30
+          done
+
+          for url in $urls; do
             if curl -sfo /dev/null "$url"; then
-              echo "ok   $url"
+              echo "ok    $url"
             else
-              echo "::warning::not yet serving $url (Pages can lag a few minutes)"
-              fail=1
+              echo "FAIL  $url"
             fi
           done
-          exit 0   # Pages propagation lag is not a deploy failure.
+
+          if [ "$fail" -ne 0 ]; then
+            if ! curl -sfo /dev/null "$base/"; then
+              echo "::warning::Pages is not serving this repo at all — is it enabled \
+          (Settings -> Pages -> branch gh-pages, root)? Skipping the check."
+              exit 0
+            fi
+            echo "::error::deploy finished but the published feeds are not being served."
+            exit 1
+          fi
