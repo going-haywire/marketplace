@@ -1,7 +1,6 @@
 # The Haywire curated marketplace
 
-A curated catalogue of [Haywire](https://github.com/going-haywire/haywire)
-libraries, published as three subscribable feeds.
+A curated catalogue of [Haywire](https://github.com/going-haywire/haywire) libraries, published as three subscribable feeds.
 
 This repo holds no library code and no packages — every package is served by
 PyPI. What it holds is a **list** of which libraries are in the catalogue, and
@@ -13,19 +12,37 @@ can subscribe to.
 Paste one of these into **Add Source** in the studio's Library Browser, or edit
 `~/.haywire/db/haybale_marketplace/marketplace.toml` directly.
 
-| channel | URL | you get |
-| --- | --- | --- |
-| **stable** | `https://going-haywire.github.io/marketplace/stable/marketplace.toml` | versions proven to install **together** |
-| **latest** | `https://going-haywire.github.io/marketplace/latest/marketplace.toml` | the newest version of each library as of the last catalogue release |
-| **edge** | `https://going-haywire.github.io/marketplace/edge/marketplace.toml` | whatever is newest on PyPI right now |
+**stable:** versions proven to install **together**
 
-`stable` is the default a fresh Haywire install subscribes to, alongside the
-framework's own feed at `going-haywire.github.io/haywire/marketplace.toml`.
+```TEXT
+https://going-haywire.github.io/marketplace/stable/marketplace.toml
+```
 
-Older catalogue releases stay available permanently:
-[archives](https://going-haywire.github.io/marketplace/archives.html).
+**latest**: the newest version of each library as of the last catalogue release
 
-### Why three
+```TEXT
+https://going-haywire.github.io/marketplace/latest/marketplace.toml
+```
+
+**edge:** whatever is newest on PyPI right now
+
+```TEXT
+`https://going-haywire.github.io/marketplace/edge/marketplace.toml
+```
+
+`stable` is the default a fresh Haywire install subscribes to, alongside the framework's own feed at `going-haywire.github.io/haywire/marketplace.toml`.
+
+Older catalogue releases stay available permanently: [archives](https://going-haywire.github.io/marketplace/archives.html).
+
+### Changing channel
+
+There is no channel switcher in the studio. Open `~/.haywire/db/haybale_marketplace/marketplace.toml` and change the `url` of
+the `[[markets]]` entry. The file is created with the alternatives already
+written in as comments.
+
+**Do not subscribe to two channels at once**. They offer the same library names at different versions, and the studio will treat that as a conflict on every refresh.
+
+### Some background
 
 Haywire libraries install into **one shared Python environment**, one at a
 time. Each install is a separate dependency resolution, so installing library B
@@ -37,24 +54,13 @@ name:
 
 - **edge** — we assert that this library is in the catalogue and that this name
   refers to this PyPI project. Nothing about the version. Regenerated nightly.
-- **latest** — everything edge asserts, plus: this exact version installs and
+- **latest** — everything _edge_ asserts, plus: this exact version installs and
   loads on its own. Pinned, so everyone on a given catalogue release gets the
   same set.
-- **stable** — everything latest asserts, plus: **this whole set has a single
+- **stable** — everything _latest_ asserts, plus: **this whole set has a single
   common dependency solution** and every library in it loads. Advances when
   Haywire cuts a release, and may be a smaller set than `latest` — a library
   that cannot be fitted alongside the others is simply not in it.
-
-### Changing channel
-
-There is no channel switcher in the studio. Open
-`~/.haywire/db/haybale_marketplace/marketplace.toml` and change the `url` of
-the `[[markets]]` entry. The file is created with the alternatives already
-written in as comments.
-
-Do not subscribe to two channels at once. They offer the same library names at
-different versions, and the studio will treat that as a conflict on every
-refresh.
 
 ## What being in this catalogue means — and does not
 
@@ -68,9 +74,9 @@ Merging a library into this repo asserts exactly three things:
 3. For the `stable` channel only: this version resolves alongside every other
    library in the set, and imports cleanly.
 
-It asserts **nothing** about whether the code is safe, correct, maintained, or
-fit for your purpose. **Nobody reads the source.** Being listed here is not a
-security review, and you should evaluate a library exactly as you would any
+It asserts **nothing** about whether the code is _safe_, _correct_, _maintained_, or
+_fit_ for your purpose. Nobody reads the source. Being listed here is **not a
+security review**, and you should evaluate a library exactly as you would any
 package you install from PyPI.
 
 ## Getting your library listed
@@ -79,19 +85,16 @@ package you install from PyPI.
 
 - **Published on PyPI.** Git-installable libraries are not accepted, from
   anyone, including us. A PyPI version is immutable — it can be deleted or
-  yanked, but never replaced with different content. A git tag can be moved
-  with `git tag -f`, and the code moves with it, so a git coordinate cannot be
-  pinned in a way that stays pinned.
+  yanked, but never replaced with different content.
 - **A valid `haybale.toml` inside the wheel**, with at minimum `name` and
   `version`.
 - **A `haywire.libraries` entry point** declared in your `pyproject.toml`.
 - **A name not already claimed** by another catalogue entry or by the
   framework's own feed.
 
-Publishing to PyPI is your own step — `haywire share` does not do it, because
-it cannot assume you use GitHub and PyPI registration needs you to be there
-anyway. Once you are on PyPI, declare it so your own feed advertises the same
-coordinate this catalogue will:
+Publishing to PyPI is your own step — `haywire share` does not do it. Check [publish-to-pypi]([Publishing to PyPI - Haywire Documentation](https://going-haywire.github.io/haywire/docs/guides/publish-to-pypi/)) for more information. 
+
+Once you are on PyPI, declare it so your own feed advertises the same coordinate this catalogue will:
 
 ```toml
 # pyproject.toml, at your project root
@@ -135,18 +138,15 @@ anything. Subscribers see the row marked stale on their next refresh.
 
 ## Why isn't my newest version in `stable`?
 
-Read
-[stable-report.md](https://going-haywire.github.io/marketplace/stable-report.md).
-It lists every library in the catalogue with its newest release, the version
-`stable` currently pins, and — when those differ — which of four reasons
+Readn[stable-report.md](https://going-haywire.github.io/marketplace/stable-report.md). It lists every library in the catalogue with its newest release, the version `stable` currently pins, and — when those differ — which of four reasons
 applies:
 
-| reason | meaning | what to do |
-| --- | --- | --- |
-| `conflict` | your version's dependencies cannot be satisfied alongside the rest of the set. The report names the exact clash | widen the constraint if you can, or wait for the other library to move |
-| `failed-load` | it installed, then failed to import. The report carries the error | fix and release |
-| `held` | a curator deliberately pinned the set below your version. The report says why | read the reason; open an issue if you disagree |
-| `not-yet-considered` | you released after the last catalogue run | nothing — the next run will pick it up |
+| reason               | meaning                                                                                                         | what to do                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `conflict`           | your version's dependencies cannot be satisfied alongside the rest of the set. The report names the exact clash | widen the constraint if you can, or wait for the other library to move |
+| `failed-load`        | it installed, then failed to import. The report carries the error                                               | fix and release                                                        |
+| `held`               | a curator deliberately pinned the set below your version. The report says why                                   | read the reason; open an issue if you disagree                         |
+| `not-yet-considered` | you released after the last catalogue run                                                                       | nothing — the next run will pick it up                                 |
 
 The report is regenerated with every solve, so it is never stale, and it is
 produced by the same command that produces the lock — it cannot describe a
@@ -199,11 +199,7 @@ explanation and what taking the newer version would have cost.
 
 ### Overriding the outcome
 
-The solve is local, so trying an alternative costs seconds. Add a line to
-`stable.constraints.txt` — `haybale-visiongraph<2.0`, say — re-run, and read
-the diff of `locks/stable.toml`: every library whose version moved as a
-consequence. That diff is the answer to "what does holding this back cost us".
-Discard it and try something else; nothing is pushed until it is right.
+The solve is local. Add a line to `stable.constraints.txt` — `haybale-visiongraph<2.0`, say — re-run, and read the diff of `locks/stable.toml`: every library whose version moved as a consequence. That diff is the answer to "what does holding this back cost us". Discard it and try something else; nothing is pushed until it is right.
 
 You should not normally need to. In an ordinary cycle the solve runs, the lock
 diff is the answer, and the constraints file is untouched.
