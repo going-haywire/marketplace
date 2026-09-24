@@ -19,8 +19,8 @@
 [[haybales]]
 name              = "haybale-visiongraph"
 label             = "Visiongraph"
-version           = "0.0.38"
-require           = "haywire-core>=0.1.0"
+version           = "0.0.40"
+require           = "haywire-core>=0.2.1"
 description       = "Visiongraph is a computer-vision pipeline library designed to simplify the prototyping of image-based algorithms"
 source            = "pypi"
 install_spec      = "haybale-visiongraph"
