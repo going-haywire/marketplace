@@ -1,0 +1,8 @@
+# Membership only. Everything descriptive about this library — label,
+# description, tags, version, authors — is read out of the wheel at
+# generation time and is NOT authored here. See README.md, "What being in this
+# catalogue means".
+name    = "haybale-spandrel"   # the PyPI distribution name
+repo    = "https://github.com/going-haywire/haybale-spandrel"
+contact = "maybites"
+added   = "2026-11-08"
