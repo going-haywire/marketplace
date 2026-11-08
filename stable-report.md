@@ -13,14 +13,15 @@ is one of four, and each says what to do about it.
 | `held` | a curator deliberately pinned the set below your version | read the reason; open an issue if you disagree |
 | `not-yet-considered` | you released after this run | nothing — the next run picks it up |
 
-Solved against `haywire-core==0.1.2`, `haywire-studio==0.1.2`, `nicegui==3.16.0`, with PyPI frozen at `2026-08-29T07:02:24Z`.
+Solved against `haywire-core==0.3.3`, `haywire-studio==0.3.3`, `nicegui==3.18.0`, with PyPI frozen at `2026-11-08T07:17:36Z`.
 Settled in 1 resolver iteration(s).
 
 ## The set
 
 | library | newest | in `stable` | state |
 | --- | --- | --- | --- |
-| `haybale-visiongraph` | 0.0.38 | 0.0.38 | `current` |
+| `haybale-spandrel` | 0.0.1 | 0.0.1 | `current` |
+| `haybale-visiongraph` | 0.0.42 | 0.0.42 | `current` |
 
 ---
 

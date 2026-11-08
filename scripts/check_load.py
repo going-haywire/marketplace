@@ -110,7 +110,9 @@ def check_load(spec: str, name: str, *, declared_os: list[str] | None = None, ti
         except subprocess.CalledProcessError as exc:
             return LoadResult(name=name, spec=spec, ok=False, error=f"could not create a venv: {exc.stderr}")
 
-        python = venv / ("Scripts" if sys.platform.startswith("win") else "bin") / "python"
+        # uv does not resolve an extensionless interpreter path on Windows.
+        windows = sys.platform.startswith("win")
+        python = venv / ("Scripts" if windows else "bin") / ("python.exe" if windows else "python")
 
         install = subprocess.run(
             ["uv", "pip", "install", "--python", str(python), spec],
