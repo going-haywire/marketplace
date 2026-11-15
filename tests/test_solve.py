@@ -258,6 +258,40 @@ def test_on_a_tie_the_more_recently_released_loses(registry, monkeypatch):
     assert result.states["haybale-b"].relaxed is True
 
 
+@pytest.mark.parametrize("derivation", ["haybale-a haybale-b clash", "haybale-b haybale-a clash"])
+def test_on_an_equal_score_the_more_recently_released_loses(registry, monkeypatch, derivation):
+    """Rule 2 also decides a tie between trials that *both* resolve.
+
+    Holding back either `a` or `b` leaves the same number of libraries at their
+    newest, so rule 1 cannot choose. `b` released later, so `b` is held back,
+    whichever order the resolver names them in.
+    """
+    catalogue = {
+        "haybale-a": {"1.0": release("haybale-a", "1.0"), "2.0": release("haybale-a", "2.0", day=5)},
+        "haybale-b": {"1.0": release("haybale-b", "1.0"), "2.0": release("haybale-b", "2.0", day=25)},
+        "haybale-c": {"1.0": release("haybale-c", "1.0")},
+    }
+    _stub_pypi(monkeypatch, catalogue)
+
+    def fake_resolve(requirements, constraints, *, exclude_newer, timeout=900.0):
+        if "haybale-a>=2.0" in requirements and "haybale-b>=2.0" in requirements:
+            return solve_stable.ResolveOutcome(ok=False, output=derivation)
+        pins = {r.split(">=")[0]: r.split(">=")[1] for r in requirements if r.startswith("haybale-")}
+        return solve_stable.ResolveOutcome(ok=True, output="", pins=pins)
+
+    monkeypatch.setattr(solve_stable, "run_resolve", fake_resolve)
+
+    result = solve(
+        repo_root=registry,
+        framework={"haywire-core": "0.1.2", "haywire-studio": "0.1.2", "nicegui": "3.16.0"},
+        exclude_newer="2026-08-29T00:00:00Z",
+        previous=Lock(channel="stable", exclude_newer="", pins={n: "1.0" for n in catalogue}),
+    )
+    assert result.states["haybale-b"].relaxed is True
+    assert result.states["haybale-a"].relaxed is False
+    assert result.pins == {"haybale-a": "2.0", "haybale-b": "1.0", "haybale-c": "1.0"}
+
+
 def test_stable_never_regresses_below_its_previous_pin(registry, monkeypatch):
     catalogue = {
         name: {"1.0": release(name, "1.0"), "2.0": release(name, "2.0", day=20)}
