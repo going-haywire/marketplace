@@ -384,6 +384,13 @@ def solve(
 
         candidates = [n for n, s in states.items() if not s.relaxed]
         named = named_in_derivation(outcome.output, candidates)
+        if not named and named_in_derivation(outcome.output, list(states)):
+            raise MarketplaceError(
+                "every library the resolver named is already held back to its floor (its previous "
+                "stable pin) and the set still does not resolve. The previous stable pins cannot be "
+                "reproduced against these framework versions; a constraint in stable.constraints.txt "
+                "is needed. Resolver output:\n\n" + outcome.output.strip()
+            )
         if not named:
             raise MarketplaceError(
                 "the resolver failed but named no curated library, so there is nothing to "
