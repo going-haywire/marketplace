@@ -45,7 +45,7 @@ from marketplace_lib import (  # noqa: E402
     read_lock,
     read_registry,
 )
-from solve_stable import read_constraints, run_resolve  # noqa: E402
+from solve_stable import read_constraints, release_banner_problem, run_resolve  # noqa: E402
 
 
 def check_yanks(lock: Lock) -> list[str]:
@@ -142,6 +142,13 @@ def verify(lock_path: Path, repo_root: Path) -> list[str]:
             f"{lock_path}: [framework] is missing {', '.join(missing)}. A stable set must be "
             f"solved against all three packages the studio's install path pins."
         )
+
+    # The README names the current release; it must name *this* one.
+    readme = repo_root / "README.md"
+    if lock.channel == "stable" and lock.curation_tag and readme.is_file():
+        problem = release_banner_problem(readme, lock)
+        if problem:
+            problems.append(problem)
 
     entries = {entry.name for entry in read_registry(repo_root / "registry")}
     orphans = sorted(set(lock.pins) - entries)

@@ -523,6 +523,67 @@ def render_report(result: SolveResult) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# The README's release banner
+# ─────────────────────────────────────────────────────────────────────────────
+
+BANNER_START = "<!-- curation:start"
+BANNER_END = "<!-- curation:end -->"
+SITE_URL = "https://going-haywire.github.io/marketplace"
+
+
+def render_release_banner(lock: Lock) -> str:
+    """The README block naming the current catalogue release.
+
+    Written from the stable lock rather than by hand, so the README cannot
+    claim a release the lock does not hold; `verify_lock.py` fails CI if the
+    two disagree.
+    """
+    count = len(lock.pins)
+    return "\n".join(
+        [
+            f"{BANNER_START}: written by scripts/solve_stable.py from locks/stable.toml. Do not edit. -->",
+            f"> **Current catalogue release: `{lock.curation_tag}`** · `stable` holds {count} "
+            f"librar{'y' if count == 1 else 'ies'}, solved against Haywire {lock.framework.get('haywire-core', '?')}",
+            ">",
+            f"> [Why each library is at its version]({SITE_URL}/stable-report.md) · "
+            f"[Earlier releases]({SITE_URL}/archives.html)",
+            BANNER_END,
+        ]
+    )
+
+
+def _banner_span(text: str, readme: Path) -> tuple[int, int]:
+    start = text.find(BANNER_START)
+    end = text.find(BANNER_END)
+    if start < 0 or end < start:
+        raise MarketplaceError(f"{readme}: no `{BANNER_START} ... {BANNER_END}` block to write the release into")
+    return start, end + len(BANNER_END)
+
+
+def write_release_banner(readme: Path, lock: Lock) -> None:
+    """Replace the README's banner block with one rendered from *lock*."""
+    text = readme.read_text(encoding="utf-8")
+    start, end = _banner_span(text, readme)
+    readme.write_text(text[:start] + render_release_banner(lock) + text[end:], encoding="utf-8")
+
+
+def release_banner_problem(readme: Path, lock: Lock) -> str | None:
+    """Why the README's banner does not describe *lock*, or None if it does."""
+    try:
+        text = readme.read_text(encoding="utf-8")
+        start, end = _banner_span(text, readme)
+    except (OSError, MarketplaceError) as exc:
+        return str(exc)
+    if text[start:end] != render_release_banner(lock):
+        return (
+            f"{readme}: the release banner does not match {lock.channel} lock "
+            f"`{lock.curation_tag}`. Re-run scripts/solve_stable.py with --curation-tag; "
+            f"do not edit the block by hand."
+        )
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -587,6 +648,17 @@ def main(argv: list[str] | None = None) -> int:
     report_path = repo_root / "stable-report.md"
     report_path.write_text(render_report(result), encoding="utf-8")
     print(f"wrote {report_path}", file=sys.stderr)
+
+    # An ad-hoc solve (no tag) is someone trying a constraint out; only a
+    # curation run names a release, so only it moves the README.
+    if args.curation_tag:
+        readme_path = repo_root / "README.md"
+        try:
+            write_release_banner(readme_path, lock)
+        except MarketplaceError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"wrote the release banner in {readme_path}", file=sys.stderr)
 
     if args.latest:
         # `latest` is not solved: it is each library at its newest, and the

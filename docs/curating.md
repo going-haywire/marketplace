@@ -39,6 +39,10 @@ uv run pytest -q
 uv run python scripts/generate_feed.py --out-dir <scratch dir> --curation-tag <tag> --strict
 ```
 
+With `--curation-tag`, the solve also rewrites the release banner at the top
+of `README.md` from the new stable lock. Commit it with the lock:
+`verify_lock.py` fails if the banner names a different release than the lock.
+
 The load gate (`scripts/check_load.py`) imports library code. It runs in CI
 (`verify.yml`) on Linux, macOS and Windows, in a job with no permissions; it
 does not need to run locally.
