@@ -1,6 +1,7 @@
 """Verify a committed lock: recompile it, and check for yanks.
 
     uv run python scripts/verify_lock.py --lock locks/stable.toml
+    uv run python scripts/verify_lock.py --lock locks/stable.toml --previous-ref origin/main
 
 Two independent checks, both of which must pass before a lock is deployed.
 
@@ -9,6 +10,13 @@ Two independent checks, both of which must pass before a lock is deployed.
 The lock is recompiled from its own inputs and the result compared to what is
 committed. This is what stops a lock being hand-edited past a failing check:
 the file has to be something the tooling would actually produce.
+
+It also needs the lock this one replaces. The solve never lets a library fall
+below its previous stable pin, and holds a conflicting library back *to* that
+pin, so without it a recompile cannot reproduce any lock in which something was
+held back. The previous lock is read from git (`--previous-ref`, the PR's base
+branch in CI), never from the lock under review: a hand-edited pin must not be
+able to justify itself.
 
 The check is only sound because the resolution is time-pinned. `--exclude-newer`
 is read *out of the lock* and reused verbatim, so CI and the curator see the
@@ -32,6 +40,7 @@ tier; the load gate that does import lives in `verify.yml`.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -91,7 +100,7 @@ def resolves_together(lock: Lock, repo_root: Path) -> tuple[bool, str]:
     return outcome.ok, outcome.output
 
 
-def resolve_from_scratch(lock: Lock, repo_root: Path) -> dict[str, str]:
+def resolve_from_scratch(lock: Lock, repo_root: Path, *, previous: Lock | None = None) -> dict[str, str]:
     """Re-run the solve from the lock's own inputs and return what it produces.
 
     **This is the check that stops a lock being hand-edited.** Merely asking
@@ -107,11 +116,13 @@ def resolve_from_scratch(lock: Lock, repo_root: Path) -> dict[str, str]:
     would make CI and the curator disagree legitimately, and the first thing
     anyone would do is switch the check off.
 
-    `previous=None` deliberately: the committed pins must not seed the solve
-    that verifies them. Passing the lock as its own floor source would let an
-    edited pin become its own justification, which is exactly the tampering
-    being checked for. Floors therefore come from the registry and PyPI alone —
-    reproducible under the frozen timestamp, and independent of the file.
+    *previous* is the lock this one replaces, as the curator's solve saw it:
+    the floors, and the versions a conflicting library is held back to. It must
+    come from somewhere the change under review cannot edit (the base branch),
+    never from the committed lock itself. Passing the lock as its own floor
+    source would let an edited pin become its own justification, which is
+    exactly the tampering being checked for. `None` means there was no previous
+    lock, and every floor is the newest release.
     """
     from solve_stable import solve
 
@@ -119,12 +130,37 @@ def resolve_from_scratch(lock: Lock, repo_root: Path) -> dict[str, str]:
         repo_root=repo_root,
         framework=dict(lock.framework),
         exclude_newer=lock.exclude_newer,
-        previous=None,
+        previous=previous,
     )
     return result.pins
 
 
-def verify(lock_path: Path, repo_root: Path) -> list[str]:
+def read_previous_lock(repo_root: Path, ref: str, lock_path: Path) -> Lock | None:
+    """The lock at *ref* (e.g. `origin/main`), or None if *ref* has none.
+
+    Read with `git show`, so it is the committed state of the base branch and
+    not anything in the working tree the change under review could touch.
+    """
+    try:
+        relative = lock_path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError as exc:
+        raise MarketplaceError(f"{lock_path} is not inside {repo_root}") from exc
+
+    def git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["git", "-C", str(repo_root), *args], capture_output=True, text=True, check=False)
+
+    if git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode != 0:
+        raise MarketplaceError(
+            f"git ref {ref!r} not found, so the previous lock cannot be read. Fetch it "
+            f"(`git fetch origin main`) or pass --previous-ref."
+        )
+    shown = git("show", f"{ref}:{relative}")
+    if shown.returncode != 0:
+        return None  # the first lock ever: nothing to hold anything back to
+    return Lock.from_toml(shown.stdout)
+
+
+def verify(lock_path: Path, repo_root: Path, *, previous: Lock | None = None) -> list[str]:
     """Every problem found with *lock_path*. Empty means it may be deployed."""
     lock = read_lock(lock_path)
     problems: list[str] = []
@@ -171,7 +207,7 @@ def verify(lock_path: Path, repo_root: Path) -> list[str]:
 
     # The check that catches hand-editing: would the solver have produced this?
     try:
-        expected = resolve_from_scratch(lock, repo_root)
+        expected = resolve_from_scratch(lock, repo_root, previous=previous)
     except MarketplaceError as exc:
         problems.append(f"could not reproduce the lock from its own inputs: {exc}")
         problems.extend(check_yanks(lock))
@@ -209,12 +245,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--lock", type=Path, default=None, help="Default: locks/stable.toml")
     parser.add_argument("--yanks-only", action="store_true", help="Skip the recompile; check yanks only.")
+    parser.add_argument(
+        "--previous-ref",
+        default="origin/main",
+        help="Git ref holding the lock this one replaces (the PR's base branch). Default: origin/main.",
+    )
     args = parser.parse_args(argv)
 
     lock_path = args.lock or (args.repo_root / "locks" / "stable.toml")
 
     try:
-        problems = check_yanks(read_lock(lock_path)) if args.yanks_only else verify(lock_path, args.repo_root)
+        if args.yanks_only:
+            problems = check_yanks(read_lock(lock_path))
+        else:
+            previous = read_previous_lock(args.repo_root, args.previous_ref, lock_path)
+            problems = verify(lock_path, args.repo_root, previous=previous)
     except MarketplaceError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

@@ -62,7 +62,9 @@ The chosen lock and the constraints change go into one pull request. CI then:
 
 - **recompiles from scratch** and fails if the committed lock is not what those
   inputs produce. This is why the resolution is timestamp-frozen: CI and the
-  curator see the same PyPI;
+  curator see the same PyPI. The floors come from the lock on the PR's base
+  branch, which is the lock the curator's solve replaced, never from the lock
+  under review;
 - **installs and imports** every pinned version, in a job with no permissions
   and no secrets;
 - **checks PyPI for yanked releases**, because an exact `==` pin installs a

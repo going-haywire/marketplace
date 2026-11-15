@@ -58,6 +58,9 @@ does not need to run locally.
   the package index. If the resolver says a version that PyPI shows does not
   exist, re-run with `UV_NO_CACHE=1`. CI starts with an empty cache and is not
   affected.
+- **`verify_lock.py` reads the previous lock from `origin/main`** (the floors
+  the solve started from). Run `git fetch origin` first, and branch the
+  curation from an up-to-date `main`.
 - **Re-running at the same instant** (`--exclude-newer <timestamp from the
   lock>`) reproduces a solve exactly. Use it to check that a surprising result
   is not a transient resolver failure.

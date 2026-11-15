@@ -51,8 +51,19 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Fetch the base branch
+        # The re-solve needs the lock this PR replaces: the solve holds a
+        # conflicting library back to its previous stable pin. It is read from
+        # the base branch, which the PR cannot edit, never from the PR's own
+        # lock (that would let an edited pin justify itself).
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
       - name: Verify locks/stable.toml
-        run: uv run python scripts/verify_lock.py --lock locks/stable.toml
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: uv run python scripts/verify_lock.py --lock locks/stable.toml --previous-ref "origin/${BASE_REF}"
 
       - name: Verify locks/latest.toml
         # `latest` is not a solved set, so only its yank check applies: a
