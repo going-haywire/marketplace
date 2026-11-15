@@ -194,7 +194,12 @@ def fetch_all_releases(name: str) -> dict[str, PyPIRelease]:
     return releases
 
 
-def newest_version(releases: dict[str, PyPIRelease], *, allow_prerelease: bool = False) -> str:
+def newest_version(
+    releases: dict[str, PyPIRelease],
+    *,
+    allow_prerelease: bool = False,
+    uploaded_before: datetime | None = None,
+) -> str:
     """The newest usable version among *releases*.
 
     Yanked releases are never "newest": aspiring to one would either fail the
@@ -202,12 +207,19 @@ def newest_version(releases: dict[str, PyPIRelease], *, allow_prerelease: bool =
     one case PEP 592 does not protect. Prereleases are excluded by default for
     the same reason a resolver excludes them: nobody subscribing to a curated
     catalogue asked to be an author's test rig.
+
+    *uploaded_before* applies the same cutoff `uv pip compile --exclude-newer`
+    does. The solve must pass it: an aspiration the frozen resolver cannot see
+    is unsatisfiable, so without it a lock stops reproducing from its own
+    inputs the moment any library releases again.
     """
     from packaging.version import InvalidVersion, Version
 
     best: tuple[Version, str] | None = None
     for version, release in releases.items():
         if release.yanked:
+            continue
+        if uploaded_before is not None and (release.uploaded is None or release.uploaded >= uploaded_before):
             continue
         try:
             parsed = Version(version)
@@ -548,3 +560,18 @@ def read_lock(path: Path) -> Lock:
 def utc_now_stamp() -> str:
     """An ISO-8601 UTC timestamp, the form `uv pip compile --exclude-newer` takes."""
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_stamp(stamp: str) -> datetime | None:
+    """Read back a timestamp in the form `utc_now_stamp` writes. Empty means none.
+
+    Raises on anything else: a lock whose cutoff cannot be read must not be
+    solved as if it had none.
+    """
+    if not stamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise MarketplaceError(f"not an ISO-8601 timestamp: {stamp!r}") from exc
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
