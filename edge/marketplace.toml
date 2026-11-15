@@ -17,10 +17,53 @@
 # source.
 
 [[haybales]]
+name             = "haybale-comfyui"
+label            = "ComfyUI"
+version          = "0.0.3"
+require          = "haywire-core>=0.5.0"
+description      = "Run ComfyUI workflows on a ComfyUI server"
+source           = "pypi"
+install_spec     = "haybale-comfyui"
+tags             = ["image", "comfyui", "diffusion", "remote"]
+on_reload        = "none"
+linked_libraries = ["haybale_image"]
+origin           = "https://github.com/going-haywire/haybale-comfyui"
+origin_provider  = "github"
+
+[[haybales]]
+name            = "haybale-protokol"
+label           = "Protokol"
+version         = "0.0.4"
+require         = "haywire-core>=0.5.1"
+description     = "Control protocols for graphs: gates, shared lines and the base for OSC, MIDI and gamepad"
+source          = "pypi"
+install_spec    = "haybale-protokol"
+tags            = ["osc", "midi", "gamepad", "control", "protocol"]
+on_reload       = "none"
+origin          = "https://github.com/going-haywire/haybale-protokol"
+origin_provider = "github"
+notes           = "NOTES.md"
+
+[[haybales]]
+name             = "haybale-protokol-osc"
+label            = "Protokol OSC"
+version          = "0.0.4"
+require          = "haywire-core>=0.5.1"
+description      = "OSC for haybale-protokol: UDP and TCP gates, OSC Receive and Send nodes"
+source           = "pypi"
+install_spec     = "haybale-protokol-osc"
+tags             = ["osc", "control", "protocol", "network"]
+on_reload        = "none"
+linked_libraries = ["haybale_protokol", "haybale_core"]
+origin           = "https://github.com/going-haywire/haybale-protokol"
+origin_provider  = "github"
+notes            = "NOTES.md"
+
+[[haybales]]
 name             = "haybale-spandrel"
 label            = "Spandrel"
-version          = "0.0.2"
-require          = "haywire-core>=0.3.3"
+version          = "0.0.3"
+require          = "haywire-core>=0.5.0"
 description      = "Upscale and restore images with PyTorch models (spandrel)"
 source           = "pypi"
 install_spec     = "haybale-spandrel"
@@ -38,10 +81,31 @@ name = "maybites"
 url  = "https://github.com/maybites"
 
 [[haybales]]
+name              = "haybale-stream"
+label             = "Stream"
+version           = "0.2.0"
+require           = "haywire-core>=0.5.0"
+description       = "Share video frames between applications over Syphon, Spout, NDI and OMT, and audio over OMT"
+source            = "pypi"
+install_spec      = "haybale-stream"
+tags              = ["video", "audio", "streaming", "syphon", "spout", "ndi", "omt", "texture sharing"]
+on_reload         = "restart"
+linked_libraries  = ["haybale_image", "haybale_core", "haybale_audio"]
+origin            = "https://github.com/going-haywire/haybale-stream"
+origin_provider   = "github"
+homepage_url      = "https://github.com/going-haywire/haybale-stream"
+documentation_url = "https://github.com/going-haywire/haybale-stream#readme"
+issues_url        = "https://github.com/going-haywire/haybale-stream/issues"
+
+[[haybales.authors]]
+name = "maybites"
+url  = "https://github.com/maybites"
+
+[[haybales]]
 name              = "haybale-visiongraph"
 label             = "Visiongraph"
-version           = "0.0.43"
-require           = "haywire-core>=0.3.3"
+version           = "0.0.44"
+require           = "haywire-core>=0.5.0"
 description       = "Visiongraph is a computer-vision pipeline library designed to simplify the prototyping of image-based algorithms"
 source            = "pypi"
 install_spec      = "haybale-visiongraph"
