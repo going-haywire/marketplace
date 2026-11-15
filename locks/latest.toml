@@ -3,17 +3,21 @@
 
 [meta]
 channel = "latest"
-exclude_newer = "2026-11-08T07:17:36Z"
-generated = "2026-11-08T07:17:38Z"
-curation_tag = "2026.11.08"
+exclude_newer = "2026-11-15T18:48:47Z"
+generated = "2026-11-15T18:48:49Z"
+curation_tag = "2026.11.15"
 
 # The framework versions this set was solved against.
 [framework]
-"haywire-core" = "0.3.3"
-"haywire-studio" = "0.3.3"
+"haywire-core" = "0.5.1"
+"haywire-studio" = "0.5.1"
 "nicegui" = "3.18.0"
 
 # The solved set.
 [pins]
-"haybale-spandrel" = "0.0.1"
-"haybale-visiongraph" = "0.0.42"
+"haybale-comfyui" = "0.0.3"
+"haybale-protokol" = "0.0.4"
+"haybale-protokol-osc" = "0.0.4"
+"haybale-spandrel" = "0.0.3"
+"haybale-stream" = "0.2.0"
+"haybale-visiongraph" = "0.0.44"
