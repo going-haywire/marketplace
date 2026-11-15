@@ -308,6 +308,36 @@ def test_yanked_releases_are_never_the_aspiration(registry, monkeypatch):
     assert all(state.aspiration == "1.0" for state in result.states.values())
 
 
+def test_the_aspiration_is_the_newest_release_before_the_cutoff(registry, monkeypatch):
+    """A release after `exclude_newer` is invisible to the resolver, so aiming at it
+    would make the lock unreproducible: the re-solve CI runs at the lock's own
+    timestamp would demand a version it cannot see."""
+    catalogue = {
+        name: {
+            "1.0": release(name, "1.0", day=1),
+            "2.0": release(name, "2.0", day=30),  # released after the cutoff below
+        }
+        for name in ("haybale-a", "haybale-b", "haybale-c")
+    }
+    _stub_pypi(monkeypatch, catalogue)
+    seen: list[list[str]] = []
+
+    def fake_resolve(requirements, constraints, *, exclude_newer, timeout=900.0):
+        seen.append(requirements)
+        return solve_stable.ResolveOutcome(ok=True, output="", pins={n: "1.0" for n in catalogue})
+
+    monkeypatch.setattr(solve_stable, "run_resolve", fake_resolve)
+    result = solve(
+        repo_root=registry,
+        framework={"haywire-core": "0.1.2", "haywire-studio": "0.1.2", "nicegui": "3.16.0"},
+        exclude_newer="2026-08-29T00:00:00Z",
+        previous=None,
+    )
+    assert all(state.aspiration == "1.0" for state in result.states.values())
+    assert "haybale-a>=1.0" in seen[0]
+    assert result.iterations == 1
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # The report
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,3 +376,12 @@ def test_the_report_explains_every_library_below_its_newest(registry, monkeypatc
     assert "would have forced" in report
     # A library at its newest needs no explanation.
     assert "### `haybale-c`" not in report
+
+
+def test_parse_stamp_reads_what_utc_now_stamp_writes():
+    from marketplace_lib import parse_stamp
+
+    assert parse_stamp("2026-11-08T07:17:36Z") == datetime(2026, 11, 8, 7, 17, 36, tzinfo=UTC)
+    assert parse_stamp("") is None
+    with pytest.raises(solve_stable.MarketplaceError):
+        parse_stamp("last tuesday")
