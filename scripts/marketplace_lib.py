@@ -8,7 +8,7 @@ three that drift.
 **Nothing in this module imports a downloaded package.** Reading a library's
 metadata is unzipping a wheel and parsing text — an operation that never
 executes the payload. That is what lets the privileged (write-capable)
-workflows generate rows at all; see README.md, "The permission split". If you
+workflows generate rows at all; see docs/design.md, §8 "Gates, and the permission split". If you
 are tempted to add an import here, it belongs in the untrusted load gate
 instead.
 """
