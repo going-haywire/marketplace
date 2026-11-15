@@ -3,6 +3,12 @@
 A curated catalogue of [Haywire](https://github.com/going-haywire/haywire)
 libraries, published as three subscribable feeds.
 
+<!-- curation:start: written by scripts/solve_stable.py from locks/stable.toml. Do not edit. -->
+> **Current catalogue release: `2026.11.15`** · `stable` holds 6 libraries, solved against Haywire 0.5.1
+>
+> [Why each library is at its version](https://going-haywire.github.io/marketplace/stable-report.md) · [Earlier releases](https://going-haywire.github.io/marketplace/archives.html)
+<!-- curation:end -->
+
 This repo holds no library code and no packages. Every package is served by
 PyPI. The repo holds a **list** of which libraries are in the catalogue, and
 the tooling under `scripts/` that turns that list into feeds a Haywire studio

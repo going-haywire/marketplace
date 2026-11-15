@@ -346,3 +346,55 @@ def test_the_report_explains_every_library_below_its_newest(registry, monkeypatc
     assert "would have forced" in report
     # A library at its newest needs no explanation.
     assert "### `haybale-c`" not in report
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The README's release banner
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _banner_lock(tag: str = "2026.11.15", pins: dict[str, str] | None = None) -> Lock:
+    return Lock(
+        channel="stable",
+        exclude_newer="2026-11-15T00:00:00Z",
+        framework={"haywire-core": "0.5.1", "haywire-studio": "0.5.1", "nicegui": "3.18.0"},
+        pins=pins if pins is not None else {"haybale-a": "1.0", "haybale-b": "2.0"},
+        generated="2026-11-15T00:00:01Z",
+        curation_tag=tag,
+    )
+
+
+def test_the_banner_names_the_release_the_lock_holds(tmp_path):
+    from solve_stable import release_banner_problem, write_release_banner
+
+    readme = tmp_path / "README.md"
+    readme.write_text("# Title\n\n<!-- curation:start -->\n<!-- curation:end -->\n\nBody.\n", encoding="utf-8")
+    write_release_banner(readme, _banner_lock())
+
+    text = readme.read_text(encoding="utf-8")
+    assert "Current catalogue release: `2026.11.15`" in text
+    assert "`stable` holds 2 libraries, solved against Haywire 0.5.1" in text
+    assert text.startswith("# Title\n\n") and text.endswith("\n\nBody.\n")
+    assert release_banner_problem(readme, _banner_lock()) is None
+
+    # Writing again replaces the block rather than stacking a second one.
+    write_release_banner(readme, _banner_lock("2026.12.01"))
+    assert readme.read_text(encoding="utf-8").count("curation:start") == 1
+
+
+def test_a_banner_for_another_release_is_a_problem(tmp_path):
+    from solve_stable import release_banner_problem, write_release_banner
+
+    readme = tmp_path / "README.md"
+    readme.write_text("<!-- curation:start -->\n<!-- curation:end -->\n", encoding="utf-8")
+    write_release_banner(readme, _banner_lock("2026.11.08"))
+    assert release_banner_problem(readme, _banner_lock("2026.11.15")) is not None
+
+
+def test_a_readme_without_the_block_is_refused(tmp_path):
+    from solve_stable import write_release_banner
+
+    readme = tmp_path / "README.md"
+    readme.write_text("# No block here\n", encoding="utf-8")
+    with pytest.raises(solve_stable.MarketplaceError):
+        write_release_banner(readme, _banner_lock())
