@@ -69,6 +69,7 @@ from marketplace_lib import (  # noqa: E402
     PyPIRelease,
     fetch_all_releases,
     newest_version,
+    parse_stamp,
     read_lock,
     read_registry,
     utc_now_stamp,
@@ -343,10 +344,14 @@ def solve(
     constraint_specs = [c.spec for c in constraints]
     held = {c.name: c for c in constraints}
 
+    # The aspiration is the newest release the frozen resolver can see. Taking
+    # PyPI's newest *today* would make every old lock unreproducible.
+    cutoff = parse_stamp(exclude_newer)
+
     states: dict[str, LibraryState] = {}
     for entry in entries:
         releases = fetch_all_releases(entry.name)
-        newest = newest_version(releases)
+        newest = newest_version(releases, uploaded_before=cutoff)
         # The hard floor is the current stable pin, so the set can never go
         # backwards. A library new to the registry has no previous pin; its
         # floor is its newest, which is also its aspiration — it either fits at
