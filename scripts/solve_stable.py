@@ -287,7 +287,18 @@ def _choose_relaxation(
 
     A candidate whose relaxation *also* fails tells us nothing about the
     objective, so it is kept only as a fallback for the tiebreak.
+
+    Equal scores are a tie, and rule 2 decides it here too: the more recently
+    released candidate is relaxed. Without that, the winner of a tie would be
+    whichever library the resolver happened to name first.
     """
+    from datetime import datetime
+
+    epoch = datetime.min.replace(tzinfo=UTC)
+
+    def released(name: str) -> datetime:
+        return _release_date(states[name]) or epoch
+
     best_name = ""
     best_outcome: ResolveOutcome | None = None
     best_score = -1
@@ -306,7 +317,8 @@ def _choose_relaxation(
         # Rule 1: the objective — how many libraries this trial actually leaves
         # at their newest release.
         score = sum(1 for name, s in states.items() if outcome.pins.get(name.lower()) == s.aspiration)
-        if score > best_score:
+        # Rule 2 on a tie: the more recently released one is relaxed.
+        if score > best_score or (score == best_score and released(candidate) > released(best_name)):
             best_name, best_outcome, best_score = candidate, outcome, score
 
     if best_name:
@@ -317,14 +329,10 @@ def _choose_relaxation(
     # Rule 2 — the more recently released loses. The rest of the set was
     # working; the new release is what broke the fit, and its author is the
     # person who can widen a constraint.
-    unrelaxed = [states[n] for n in named if not states[n].relaxed]
+    unrelaxed = [n for n in named if not states[n].relaxed]
     if not unrelaxed:
         return "", None
-    from datetime import datetime
-
-    epoch = datetime.min.replace(tzinfo=UTC)
-    newest_released = max(unrelaxed, key=lambda s: _release_date(s) or epoch)
-    return newest_released.name, None
+    return max(unrelaxed, key=released), None
 
 
 def solve(
